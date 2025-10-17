@@ -10,12 +10,23 @@ from backend.routes.companies import (
     CompanyBatchOutput,
     fetch_companies_with_liked,
 )
+# New imports
+from typing import List
+from backend.db.database import CompanyCollectionAssociation
+from fastapi import HTTPException
+
 
 router = APIRouter(
     prefix="/collections",
     tags=["collections"],
 )
 
+# MY CODE
+############################################################
+class AddCompaniesToCollectionRequest(BaseModel):
+    target_collection_id: uuid.UUID
+    company_ids: List[int]  # List of company IDs to add
+############################################################
 
 class CompanyCollectionMetadata(BaseModel):
     id: uuid.UUID
@@ -25,6 +36,41 @@ class CompanyCollectionMetadata(BaseModel):
 class CompanyCollectionOutput(CompanyBatchOutput, CompanyCollectionMetadata):
     pass
 
+# POST REQUEST FOR ADDING COMPANIES
+############################################################
+@router.post("/add-companies")
+def add_companies_to_collection(
+    request: AddCompaniesToCollectionRequest,
+    db: Session = Depends(database.get_db),
+):
+    # Check target collection exists
+    collection = db.query(database.CompanyCollection).filter_by(id=request.target_collection_id).first()
+    if not collection:
+        raise HTTPException(status_code=404, detail="Target collection not found")
+
+    # Prepare new associations, avoiding duplicates by checking existing first
+    existing_assocs = db.query(CompanyCollectionAssociation).filter(
+        CompanyCollectionAssociation.collection_id == request.target_collection_id,
+        CompanyCollectionAssociation.company_id.in_(request.company_ids),
+    ).all()
+
+    existing_company_ids = {assoc.company_id for assoc in existing_assocs}
+    new_company_ids = [cid for cid in request.company_ids if cid not in existing_company_ids]
+
+    # Create new associations
+    new_associations = [
+        CompanyCollectionAssociation(company_id=cid, collection_id=request.target_collection_id)
+        for cid in new_company_ids
+    ]
+
+    db.bulk_save_objects(new_associations)
+    db.commit()
+
+    return {
+        "added_count": len(new_associations),
+        "already_in_collection": len(existing_company_ids),
+    }
+############################################################
 
 @router.get("", response_model=list[CompanyCollectionMetadata])
 def get_all_collection_metadata(
