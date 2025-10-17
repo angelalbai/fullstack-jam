@@ -21,11 +21,15 @@ router = APIRouter(
     tags=["collections"],
 )
 
-# MY CODE
+# PYDANTIC MODELS
 ############################################################
 class AddCompaniesToCollectionRequest(BaseModel):
     target_collection_id: uuid.UUID
     company_ids: List[int]  # List of company IDs to add
+
+class AddAllCompaniesRequest(BaseModel):
+    source_collection_id: uuid.UUID
+    target_collection_id: uuid.UUID
 ############################################################
 
 class CompanyCollectionMetadata(BaseModel):
@@ -36,7 +40,7 @@ class CompanyCollectionMetadata(BaseModel):
 class CompanyCollectionOutput(CompanyBatchOutput, CompanyCollectionMetadata):
     pass
 
-# POST REQUEST FOR ADDING COMPANIES
+# POST REQUEST FOR ADDING SELECTED COMPANIES
 ############################################################
 @router.post("/add-companies")
 def add_companies_to_collection(
@@ -70,6 +74,67 @@ def add_companies_to_collection(
         "added_count": len(new_associations),
         "already_in_collection": len(existing_company_ids),
     }
+############################################################
+
+# POST REQUEST FOR ADDING ALL COMPANIES
+############################################################
+@router.post("/add-all-companies")
+def add_all_companies_to_collection(
+    request: AddAllCompaniesRequest,
+    db: Session = Depends(database.get_db),
+):
+    # Validate that both collections exist
+    source = db.query(database.CompanyCollection).filter_by(id=request.source_collection_id).first()
+    target = db.query(database.CompanyCollection).filter_by(id=request.target_collection_id).first()
+
+    if not source:
+        raise HTTPException(status_code=404, detail="Source collection not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target collection not found")
+
+    # Fetch all company IDs from the source collection
+    source_company_ids = db.query(CompanyCollectionAssociation.company_id).filter(
+        CompanyCollectionAssociation.collection_id == request.source_collection_id
+    ).all()
+
+    # Flatten to a list of integers
+    source_company_ids = [row[0] for row in source_company_ids]
+
+    if not source_company_ids:
+        return {
+            "added_count": 0,
+            "already_in_collection": 0
+        }
+
+    # Check for already existing associations in the target collection
+    existing_assocs = db.query(CompanyCollectionAssociation.company_id).filter(
+        CompanyCollectionAssociation.collection_id == request.target_collection_id,
+        CompanyCollectionAssociation.company_id.in_(source_company_ids)
+    ).all()
+
+    existing_company_ids = {row[0] for row in existing_assocs}
+
+    new_company_ids = [
+        cid for cid in source_company_ids if cid not in existing_company_ids
+    ]
+
+    # Create new association entries
+    new_assocs = [
+        CompanyCollectionAssociation(
+            collection_id=request.target_collection_id,
+            company_id=cid
+        )
+        for cid in new_company_ids
+    ]
+
+    db.bulk_save_objects(new_assocs)
+    db.commit()
+
+    return {
+        "added_count": len(new_assocs),
+        "already_in_collection": len(existing_company_ids)
+    }
+
 ############################################################
 
 @router.get("", response_model=list[CompanyCollectionMetadata])

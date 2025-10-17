@@ -60,6 +60,7 @@ export async function getCollectionsMetadata(): Promise<ICollection[]> {
 }
 
 // MY CODE
+////////////////////////////////////////////////////////////////////////////////////////
 export async function addCompaniesToCollection(
   targetCollectionId: string,
   companyIds: number[]
