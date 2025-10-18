@@ -59,7 +59,7 @@ export async function getCollectionsMetadata(): Promise<ICollection[]> {
     }
 }
 
-// MY CODE
+// addCompaniesToCollection
 ////////////////////////////////////////////////////////////////////////////////////////
 export async function addCompaniesToCollection(
   targetCollectionId: string,
@@ -78,6 +78,31 @@ export async function addCompaniesToCollection(
 
   if (!response.ok) {
     throw new Error(`Failed to add companies: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+////////////////////////////////////////////////////////////////////////////////////////
+
+// addAllCompaniesToCollection
+////////////////////////////////////////////////////////////////////////////////////////
+export async function addAllCompaniesToCollection(
+  sourceCollectionId: string,
+  targetCollectionId: string
+): Promise<{ added_count: number; already_in_collection: number }> {
+  const response = await fetch("http://localhost:8000/collections/add-all-companies", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      source_collection_id: sourceCollectionId,
+      target_collection_id: targetCollectionId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to add all companies: ${response.statusText}`);
   }
 
   return response.json();

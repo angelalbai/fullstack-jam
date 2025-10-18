@@ -59,6 +59,27 @@ const CompanyTable = (props: { selectedCollectionId: string; collections: { id: 
       setIsAdding(false);
     }
   };
+  const handleAddAllToList = async () => {
+    if (!selectedTargetId) return;
+
+    setIsAdding(true);
+
+    try {
+      const result = await addAllCompaniesToCollection(
+        props.selectedCollectionId,
+        selectedTargetId
+      );
+      setAlertSeverity('success');
+      setAlertMessage(`Added ${result.added_count} companies. Skipped ${result.already_in_collection}.`);
+      setTimeout(() => setAlertMessage(null), 5000);
+    } catch (error: unknown) {
+      console.error("Error adding companies:", error);
+      setAlertSeverity("error");
+      setAlertMessage(error instanceof Error ? error.message : "Unknown error occurred");
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,13 +118,23 @@ const CompanyTable = (props: { selectedCollectionId: string; collections: { id: 
             <LinearProgress />
           </div>
         ) : (
-          <button
-            disabled={selectedIds.length === 0 || !selectedTargetId}
-            onClick={handleAddToList}
-            className="bg-orange-500 text-white px-4 py-2 rounded disabled:opacity-50 hover:cursor-pointer hover:bg-orange-300"
-          >
-            Add Selected Companies to Collection
-          </button>
+          <>
+            <button
+              disabled={selectedIds.length === 0 || !selectedTargetId}
+              onClick={handleAddToList}
+              className="bg-orange-500 text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-orange-300"
+            >
+              Add Selected Companies
+            </button>
+
+            <button
+              disabled={!selectedTargetId}
+              onClick={handleAddAllToList}
+              className="bg-orange-500 text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-orange-300"
+            >
+              Add All Companies
+            </button>
+          </>
         )}
       </div>
 
